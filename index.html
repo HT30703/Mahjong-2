@@ -21,8 +21,16 @@
 .chip i{font-style:normal;font-size:10px;margin-left:5px;padding:1px 5px;border-radius:6px;background:rgba(255,255,255,.22)}
 .fanbox button:disabled{opacity:.3}
 .adjnote{text-align:center;font-size:12px;color:var(--muted);margin-top:8px}
+.fanbox .v{display:flex;align-items:baseline;justify-content:center}
+.fanin{width:2.6ch;min-width:64px;border:0;border-bottom:2px dashed var(--line);background:transparent;color:var(--ink);
+  font:700 46px var(--num);text-align:center;padding:0;outline:none;border-radius:0;-webkit-user-select:text;user-select:text}
+.fanin:focus{border-bottom-color:var(--gold)}
 .glbl{font-size:11px;color:var(--muted);margin:12px 0 6px;letter-spacing:.08em}
 .glbl:first-of-type{margin-top:2px}
+.toolbar{grid-template-columns:repeat(6,minmax(0,1fr))!important;padding-left:6px!important;padding-right:6px!important}
+.tool{font-size:10.5px!important;white-space:nowrap}
+.tool .ic{width:42px!important;height:42px!important}
+@media (max-width:370px){.tool .ic{width:38px!important;height:38px!important}.tool{font-size:9.5px!important}}
 </style>
 </head>
 <body>

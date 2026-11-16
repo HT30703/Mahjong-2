@@ -50,22 +50,39 @@ if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catc
 function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const r=new Uint32Array(1);crypto.getRandomValues(r);const j=r[0]%(i+1);[a[i],a[j]]=[a[j],a[i]]}return a}
 function vZhiwai(){
   const z=UI.zw, ids=z.ids;
+  // 開局入座用 setupD 嘅名，打緊用 G.players
+  const who=id=>z.setup?{emoji:setupD.emojis[id],name:setupD.names[id].trim()||`玩家${id+1}`}:G.players[id];
   const cells=ids.map((id,k)=>{
     const w=z.res?z.res.indexOf(id):-1;
     return `<div class="cell"><div class="mjt ${z.res?'flip':''}"><div class="in" style="animation-delay:${k*.15}s">
       <div class="b"></div><div class="f ${w===0?'east':''}">${w>=0?WINDS[w]:''}</div></div></div>
-      <div class="n">${G.players[id].emoji} ${esc(G.players[id].name)}</div></div>`}).join('');
+      <div class="n">${who(id).emoji} ${esc(who(id).name)}</div></div>`}).join('');
   return sheet('執位',`<div class="zw">${cells}</div>
-    <div class="zwnote">${z.res?`執到「東」嘅 ${esc(G.players[z.res[0]].name)} 坐東位做莊<br>其他人按東南西北逆時針入座，分數跟人走`:'按「執位」，每人隨機抽一隻風牌決定座位'}</div>`,
+    <div class="zwnote">${z.res?`執到「東」嘅 ${esc(who(z.res[0]).name)} 坐東位做莊<br>其他人按東南西北逆時針入座${z.setup?'':'，分數跟人走'}`:'按「執位」，每人隨機抽一隻風牌決定座位'}</div>`,
     z.res?`<div class="stack"><button class="btn primary" data-a="zwApply">確認入座</button><button class="btn ghost" data-a="zwDraw">再執過</button></div>`
          :`<button class="btn primary" data-a="zwDraw">執位</button>`);
 }
 
 /* ---- 圈完提示 ---- */
+// 日麻完場：(點數 − 返し點)/1000 ＋ 順位馬，第一名加オカ同場上立直棒
+function jpFinal(){
+  const st=G.settings.jp, uma=UMA[String(st.uma??'10-20')]||UMA['0'], kaeshi=st.kaeshi??30000;
+  const order=G.seats.map((id,i)=>({id,i,pts:totalOf(id)}))
+    .sort((a,b)=>b.pts-a.pts||((a.i-(G.startDealer||0)+4)%4)-((b.i-(G.startDealer||0)+4)%4));
+  order.forEach((o,k)=>{ if(k===0) o.pts+=G.pot||0; o.pt=(o.pts-kaeshi)/1000+uma[k]+(k===0?(kaeshi-st.start)*4/1000:0); });
+  return order;
+}
 function vRoundEnd(){
-  const r=UI.re, ids=G.seats.slice().sort((a,b)=>totalOf(b)-totalOf(a));
-  const rank=ids.map((id,i)=>`<div class="r"><span class="no">${i+1}</span><span>${G.players[id].emoji}</span><span class="t">${esc(G.players[id].name)}</span>
-    <span class="v ${cls(totalOf(id)-base())}">${fmtT(totalOf(id))}</span></div>`).join('');
+  const r=UI.re;
+  let rank;
+  if(r.final&&G.mode==='jp'){
+    rank=jpFinal().map((o,i)=>`<div class="r"><span class="no">${i+1}</span><span>${G.players[o.id].emoji}</span><span class="t">${esc(G.players[o.id].name)}<small style="display:block;font-size:11px;color:var(--muted);font-weight:400">${o.pts.toLocaleString('en-US')} 點</small></span>
+      <span class="v ${cls(o.pt)}">${o.pt>0?'+':''}${(Math.round(o.pt*10)/10).toFixed(1)}</span></div>`).join('');
+  } else {
+    const ids=G.seats.slice().sort((a,b)=>totalOf(b)-totalOf(a));
+    rank=ids.map((id,i)=>`<div class="r"><span class="no">${i+1}</span><span>${G.players[id].emoji}</span><span class="t">${esc(G.players[id].name)}</span>
+      <span class="v ${cls(totalOf(id)-base())}">${fmtT(totalOf(id))}</span></div>`).join('');
+  }
   const body=`<div class="re-hero"><div class="big">${r.title}</div><div class="sm">${r.sub}</div></div><div class="rank">${rank}</div>`;
   const foot = r.final
     ? `<div class="stack"><button class="btn primary" data-a="confirmNew">開新一場</button><button class="btn soft" data-a="openZw">執位再打</button><button class="btn ghost" data-a="close">繼續打落去</button></div>`
@@ -107,6 +124,13 @@ Object.assign(ACT,{
     const b={passes:G.passes,len:G.history.length};
     _commit(); if(G.history.length===b.len) return;
     navigator.vibrate?.(25);
+    if(G.mode==='jp'&&G.settings.jp.tobi!==false){
+      const bust=G.seats.filter(id=>totalOf(id)<0);
+      if(bust.length){
+        UI.re={title:'飛び · 完場',sub:`${bust.map(id=>esc(G.players[id].name)).join('、')} 跌穿 0 點`,final:true};
+        UI.sheet='roundEnd'; navigator.vibrate?.([40,60,40]); return;
+      }
+    }
     if(!PREFS.remind||G.passes===b.passes) return;
     const endAt=G.mode==='jp'?8:16;
     if(G.passes%4===0){
@@ -123,14 +147,15 @@ Object.assign(ACT,{
     UI.zw.res=shuffle(UI.zw.ids);
   },
   zwApply(){
+    if(UI.zw.setup){
+      const order=UI.zw.res; // order[位] = 執到呢個風嘅人
+      setupD.names=order.map(i=>setupD.names[i]); setupD.emojis=order.map(i=>setupD.emojis[i]); setupD.dealer=0;
+      UI.sheet=null; toast(`${setupD.names[0].trim()||'東家'} 坐東做莊`); return;
+    }
     G.seats=UI.zw.res.slice(); G.dealer=0; G.repeat=0; if(G.mode==='jp') G.honba=0;
     UI.sheet=null; save(); toast(`${P(0).emoji} ${P(0).name} 坐東做莊`);
   },
-  sShuffle(){
-    const order=shuffle([0,1,2,3]);
-    setupD.names=order.map(i=>setupD.names[i]); setupD.emojis=order.map(i=>setupD.emojis[i]); setupD.dealer=0;
-    toast(`${setupD.names[0]||'東家'} 執到東，做莊`);
-  },
+  sShuffle(){ UI.zw={setup:true,ids:[0,1,2,3],res:null}; UI.sheet='zhiwai'; },
   infoTab(v){UI.infoTab=v},
   theme(v){PREFS.theme=v;savePrefs();applyTheme()},
   pref(k){PREFS[k]=!PREFS[k];savePrefs();syncWake().then(render)}
@@ -139,14 +164,32 @@ Object.assign(ACT,{
 /* 入座畫面加隨機執位掣 */
 const _vSetup=vSetup;
 vSetup=function(){
-  return _vSetup().replace('<div style="padding:12px 18px 70px">','<div class="setup-foot" style="padding:8px 18px 70px"><button class="dice" data-a="sShuffle" style="margin:0 auto 12px">🎲 隨機執位</button>');
+  return _vSetup().replace('<div style="padding:12px 18px 70px">','<div class="setup-foot" style="padding:8px 18px 70px"><button class="dice" data-a="sShuffle" style="margin:0 auto 12px">🀄 執位（抽風牌決定座位）</button>');
 };
 
-/* 每次畫面更新後：主題、玩法 class、螢幕常亮 */
+/* 每次畫面更新後：主題、玩法 class、螢幕常亮；保留捲動位置 */
 const _render=render;
 render=function(){
+  const q=s=>$app().querySelector(s);
+  const sb=q('.sheet .bd'), bd=q('.body');
+  const keep={sheet:UI.sheet, sTop:sb?sb.scrollTop:0, bTop:bd?bd.scrollTop:0, tab:UI.tab};
   _render();
   $app().className='phone'+(G?' mode-'+G.mode:'');
+  if(keep.sheet&&keep.sheet===UI.sheet){const n=q('.sheet .bd'); if(n) n.scrollTop=keep.sTop}
+  if(keep.tab===UI.tab){const n=q('.body'); if(n) n.scrollTop=keep.bTop}
   syncWake();
 };
+// 直接撳數字輸入番／台／飜：只更新結果，唔重畫輸入框（鍵盤唔會收埋）
+document.addEventListener('input',e=>{
+  const f=e.target; if(!f.hasAttribute||!f.hasAttribute('data-fanin')||!hand) return;
+  const raw=f.value.replace(/\D/g,'').slice(0,3); if(raw!==f.value) f.value=raw;
+  hand.adj=(raw===''?0:parseInt(raw,10))-chipSum(hand); sanitize(hand);
+  const q=s=>$app().querySelector(s), tmp=document.createElement('div'); tmp.innerHTML=vSheet();
+  [['.sheet .ft','.ft'],['.sheet .adjnote','.adjnote']].forEach(([a,b])=>{const o=q(a),n=tmp.querySelector(b); if(o&&n) o.innerHTML=n.innerHTML});
+  const minus=q('[data-a="hFan"][data-v="-1"]'); if(minus) minus.disabled=hand.fan<=0;
+});
+// 打完先重畫一次（日麻符數要睇飜數決定顯唔顯示）
+document.addEventListener('change',e=>{ if(e.target.hasAttribute&&e.target.hasAttribute('data-fanin')&&G&&G.mode==='jp') render(); });
+document.addEventListener('focusin',e=>{ if(e.target.hasAttribute&&e.target.hasAttribute('data-fanin')) setTimeout(()=>{try{e.target.select()}catch(x){}},0) });
+document.addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.hasAttribute&&e.target.hasAttribute('data-fanin')) e.target.blur(); });
 applyTheme(); render();

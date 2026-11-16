@@ -86,11 +86,11 @@ function vNow(){
         </button>`}).join('')}
       <div class="center">
         <div class="rd" data-a="openDealer" style="cursor:pointer">${r.main} ›<small>${r.sub}</small></div>
-        <button class="pill" data-a="openDraw">流局</button>
+        <button class="pill" data-a="openDraw" ${UI.chain?'style="background:var(--ink);color:var(--bg)"':''}>${UI.chain?'完成':'流局 / '+MODES[G.mode].zha}</button>
         ${G.mode==='jp'&&G.pot?`<div class="pot">立直棒 ${G.pot}</div>`:''}
       </div>
     </div>
-    <div class="hint">按 ${MODES[G.mode].win}嗰位玩家 嚟記分</div>
+    <div class="hint">${UI.chain?'一炮多響：按下一位食糊嘅玩家，冇就按「完成」':'按 '+MODES[G.mode].win+'嗰位玩家 嚟記分'}</div>
   </div>`;
 }
 
@@ -128,13 +128,13 @@ function vLog(){
   return `<div class="body">${G.history.map((h,k)=>({h,k})).reverse().map(({h,k})=>{
     const ids=Object.keys(h.deltas).filter(id=>h.deltas[id]||h.seats.includes(id));
     const show=(h.seats||ids).slice(0,4);
-    return `<div class="rec"><div class="top"><span>第 ${k+1} 鋪 · ${h.round}</span>${k===G.history.length-1?'<span data-a="undo" style="color:var(--red);cursor:pointer">還原</span>':''}</div>
+    return `<div class="rec"><div class="top"><span>第 ${k+1} 鋪 · ${h.round}</span><span>${h.input?`<span data-a="editEntry" data-v="${k}" style="color:var(--gold);cursor:pointer;margin-right:12px">修改</span>`:''}${k===G.history.length-1?'<span data-a="undo" style="color:var(--red);cursor:pointer">還原</span>':''}</span></div>
       <div class="ttl">${h.kind==='win'?`${G.players[h.winner].emoji} ${esc(G.players[h.winner].name)} · `:''}${esc(h.label)}</div>
       <div class="ds">${show.map(id=>`<div>${esc(G.players[id].name)}<b class="${cls(h.deltas[id]||0)}">${h.deltas[id]?fmt(h.deltas[id]):'–'}</b></div>`).join('')}</div></div>`}).join('')}</div>`;
 }
 
 function vGame(){
-  const tools=[['plus','新牌局','openNew'],['undo','還原分數','undo'],['grid','莊家設定','openDealer'],['swap','換人/換位','openSwap'],['info','設定','openInfo']];
+  const tools=[['plus','新牌局','openNew'],['undo','還原','undo'],['redo','重做','redo'],['grid','莊家設定','openDealer'],['swap','換人/換位','openSwap'],['info','設定','openInfo']];
   const tabs=[['sword','現時賽果','now'],['chart','統計數據','stats'],['list','詳細紀錄','log']];
   return `<div class="screen">
     <div class="toolbar">${tools.map(t=>`<button class="tool" data-a="${t[2]}"><div class="ic">${ICON[t[0]]}</div>${t[1]}</button>`).join('')}</div>
