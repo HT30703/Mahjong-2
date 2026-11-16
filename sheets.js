@@ -5,11 +5,13 @@ function newHand(seat,type){
   return d;
 }
 const has=(d,n)=>(d.sel[n]||0)>0;
+const isSolo=c=>c.limit||c.solo;
 // 呢鋪嘅情況（自摸／出銃、莊閒、前提番種）合唔合
 function situational(c,d){
   if(c.only&&d.method!==c.only) return false;
   if(c.dealer===true&&d.winner!==G.dealer) return false;
   if(c.dealer===false&&d.winner===G.dealer) return false;
+  if(c.fromDealer&&d.from!==G.dealer) return false;
   if(c.req&&!c.req.every(n=>has(d,n))) return false;
   return true;
 }
@@ -17,16 +19,24 @@ function situational(c,d){
 function isAvail(c,d){
   if(c.auto||!situational(c,d)) return false;
   const list=CHIPS[G.mode];
-  if(list.some(o=>o.limit&&o.n!==c.n&&has(d,o.n))) return false;
-  if(c.limit&&list.some(o=>!o.limit&&!o.auto&&has(d,o.n))) return false;
+  if(list.some(o=>isSolo(o)&&o.n!==c.n&&has(d,o.n))) return false;
+  if(isSolo(c)&&list.some(o=>!isSolo(o)&&!o.auto&&has(d,o.n))) return false;
   if((c.x||[]).some(n=>has(d,n))) return false;
   if(list.some(o=>has(d,o.n)&&(o.x||[]).includes(c.n))) return false;
   return true;
 }
+// 一台花已用咗一套花，正花最多得返另一套嗰隻
+function maxOf(c,d){return c.n==='正花'&&has(d,'一台花')?1:(c.max||1)}
 function autoOn(c,d){
+  if(CHIPS[G.mode].some(o=>o.solo&&has(d,o.n))) return false;
   if(c.auto==='tsumo') return d.method==='tsumo';
   if(c.auto==='menqing') return d.method==='tsumo'&&has(d,'門清');
   return false;
+}
+function chipName(c,d){
+  if(c.wind==='seat') return `門風（${seatWind(d.winner)}）`;
+  if(c.wind==='round') return `圈風（${WINDS[Math.floor(G.passes/4)%4]}）`;
+  return c.n;
 }
 function sanitize(d){
   const list=CHIPS[G.mode];
@@ -34,7 +44,7 @@ function sanitize(d){
     list.forEach(c=>{
       if(c.auto){d.sel[c.n]=autoOn(c,d)?1:0;return}
       const n=d.sel[c.n]||0; if(!n) return;
-      d.sel[c.n]=0; if(isAvail(c,d)) d.sel[c.n]=n;
+      d.sel[c.n]=0; if(isAvail(c,d)) d.sel[c.n]=Math.min(n,maxOf(c,d));
     });
   }
   d.fan=list.reduce((s,c)=>s+c.v*(d.sel[c.n]||0),0)+d.adj;
@@ -78,9 +88,12 @@ function vSheet(){
     if(d.method){
       const list=CHIPS[G.mode];
       const vis=list.filter(c=>c.auto?has(d,c.n):(has(d,c.n)||situational(c,d)));
-      b+=`<div class="lbl">番種${G.mode==='tw'?'（莊家台會另外自動加）':''}</div><div class="chips">${vis.map(c=>{
+      const groups=[...new Set(vis.map(c=>c.g||''))];
+      const chip=c=>{
           const k=list.indexOf(c), n=d.sel[c.n]||0, dis=c.auto||(!n&&!isAvail(c,d));
-          return `<button class="chip ${n?'on':''} ${c.auto?'auto':''}" data-a="hChip" data-v="${k}" ${dis?'disabled':''}>${c.n}${n>1?' ×'+n:''}<b>${c.v*(n||1)}</b>${c.auto?'<i>自動</i>':''}</button>`}).join('')}</div>
+          return `<button class="chip ${n?'on':''} ${c.auto?'auto':''}" data-a="hChip" data-v="${k}" ${dis?'disabled':''}>${chipName(c,d)}${n>1?' ×'+n:''}<b>${c.v*(n||1)}</b>${c.auto?'<i>自動</i>':''}</button>`};
+      b+=`<div class="lbl">番種${G.mode==='tw'?'（莊家台會另外自動加）':''}</div>
+        ${groups.map(g=>`${g?`<div class="glbl">${g}</div>`:''}<div class="chips">${vis.filter(c=>(c.g||'')===g).map(chip).join('')}</div>`).join('')}
         <div class="lbl">合共</div>
         <div class="fanbox"><button data-a="hFan" data-v="-1" ${d.adj?'':'disabled'}>−</button><div class="v">${d.fan}<small>${M.unit}</small></div><button data-a="hFan" data-v="1">＋</button></div>
         ${d.adj?`<div class="adjnote">包括另加 ${d.adj}${M.unit}</div>`:`<div class="adjnote">有其他${M.unit}可以按 ＋ 另加</div>`}`;
@@ -194,9 +207,9 @@ Object.assign(ACT,{
   hChip(v){
     const c=CHIPS[G.mode][+v], n=hand.sel[c.n]||0;
     if(c.auto) return;
-    if(c.limit&&!n&&situational(c,hand)) hand.sel={}; // 揀爆棚牌就清走其他番種
+    if(isSolo(c)&&!n&&situational(c,hand)) hand.sel={}; // 揀例牌／花糊就清走其他番種
     if(!n&&!isAvail(c,hand)) return;
-    hand.sel[c.n]=n<(c.max||1)?n+1:0; // 可疊嘅番種：再按加一，到頂就清零
+    hand.sel[c.n]=n<maxOf(c,hand)?n+1:0; // 可疊嘅番種：再按加一，到頂就清零
     sanitize(hand);
   },
   hRiichi(v){if(+v===hand.winner)return;const i=hand.riichi.indexOf(+v);i<0?hand.riichi.push(+v):hand.riichi.splice(i,1)},
