@@ -1,0 +1,15 @@
+{
+  "name": "番數王",
+  "short_name": "番數王",
+  "description": "四人麻雀計分 · 香港 / 台灣 / 日本",
+  "lang": "zh-HK",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f1e7",
+  "theme_color": "#f6f1e7",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
